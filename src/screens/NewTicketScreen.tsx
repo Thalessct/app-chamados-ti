@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TicketCategory } from '../types/ticket';
 import { colors } from '../theme/colors';
+import { categoryIcons } from '../theme/categories';
+import { useTabBarSpace } from '../theme/layout';
+import { radius, shadows, typography } from '../theme/tokens';
+import Button from '../components/Button';
+import TextField from '../components/TextField';
 
 interface Props {
   onCreate: (data: {
@@ -31,17 +35,26 @@ const categories: TicketCategory[] = [
   'Outros',
 ];
 
+const TITLE_LIMIT = 80;
+const DESCRIPTION_LIMIT = 500;
+
 export default function NewTicketScreen({ onCreate }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<TicketCategory>('Hardware');
+  const [errors, setErrors] = useState<{ title?: string; description?: string }>({});
   const [saving, setSaving] = useState(false);
+  const tabBarSpace = useTabBarSpace();
 
   async function handleSubmit() {
-    if (!title.trim() || !description.trim()) {
-      Alert.alert('Campos obrigatórios', 'Preencha o título e a descrição.');
-      return;
-    }
+    if (saving) return;
+
+    const found: { title?: string; description?: string } = {};
+    if (!title.trim()) found.title = 'Dê um título curto para o problema.';
+    if (!description.trim()) found.description = 'Explique o que está acontecendo.';
+
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
 
     setSaving(true);
     try {
@@ -59,29 +72,36 @@ export default function NewTicketScreen({ onCreate }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
         >
-          <Text style={styles.title}>Novo chamado</Text>
+          <Text style={styles.title} accessibilityRole="header">
+            Novo chamado
+          </Text>
           <Text style={styles.subtitle}>
             Descreva o problema para abrir uma solicitação de suporte.
           </Text>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Título</Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
+          <View style={styles.card}>
+            <TextField
+              label="Título"
+              icon="create-outline"
               placeholder="Ex.: Computador não liga"
-              placeholderTextColor="#9CA3AF"
-              style={styles.input}
-              maxLength={80}
+              value={title}
+              onChangeText={(value) => {
+                setTitle(value);
+                setErrors((current) => ({ ...current, title: undefined }));
+              }}
+              error={errors.title}
+              maxLength={TITLE_LIMIT}
+              returnKeyType="next"
             />
 
             <Text style={styles.label}>Categoria</Text>
@@ -91,15 +111,21 @@ export default function NewTicketScreen({ onCreate }: Props) {
                 return (
                   <Pressable
                     key={item}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
                     onPress={() => setCategory(item)}
-                    style={[styles.category, active && styles.categoryActive]}
+                    style={({ pressed }) => [
+                      styles.category,
+                      active && styles.categoryActive,
+                      pressed && styles.categoryPressed,
+                    ]}
                   >
-                    <Text
-                      style={[
-                        styles.categoryText,
-                        active && styles.categoryTextActive,
-                      ]}
-                    >
+                    <Ionicons
+                      name={categoryIcons[item]}
+                      size={20}
+                      color={active ? colors.primary : colors.textMuted}
+                    />
+                    <Text style={[styles.categoryText, active && styles.categoryTextActive]}>
                       {item}
                     </Text>
                   </Pressable>
@@ -107,38 +133,31 @@ export default function NewTicketScreen({ onCreate }: Props) {
               })}
             </View>
 
-            <Text style={styles.label}>Descrição</Text>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
+            <TextField
+              label="Descrição"
+              icon="document-text-outline"
               placeholder="Explique o que está acontecendo..."
-              placeholderTextColor="#9CA3AF"
-              style={[styles.input, styles.textArea]}
+              value={description}
+              onChangeText={(value) => {
+                setDescription(value);
+                setErrors((current) => ({ ...current, description: undefined }));
+              }}
+              error={errors.description}
+              counter={`${description.length}/${DESCRIPTION_LIMIT}`}
               multiline
-              textAlignVertical="top"
-              maxLength={500}
+              maxLength={DESCRIPTION_LIMIT}
             />
 
             <View style={styles.notice}>
-              <Text style={styles.noticeTitle}>Status inicial</Text>
+              <Ionicons name="information-circle" size={20} color={colors.primary} />
               <Text style={styles.noticeText}>
-                Todo chamado criado começa automaticamente como ABERTO.
+                Todo chamado criado começa com o status Aberto.
               </Text>
             </View>
 
-            <Pressable
-              onPress={handleSubmit}
-              disabled={saving}
-              style={({ pressed }) => [
-                styles.button,
-                pressed && styles.buttonPressed,
-                saving && styles.buttonDisabled,
-              ]}
-            >
-              <Text style={styles.buttonText}>
-                {saving ? 'Abrindo chamado...' : 'Abrir chamado'}
-              </Text>
-            </Pressable>
+            <View style={styles.submit}>
+              <Button label="Abrir chamado" loading={saving} onPress={handleSubmit} />
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -155,104 +174,81 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
+    ...typography.display,
+    color: colors.onDark,
   },
   subtitle: {
-    marginTop: 5,
-    lineHeight: 20,
-    color: colors.textSecondary,
+    ...typography.body,
+    marginTop: 6,
+    color: colors.onDarkMuted,
   },
-  form: {
-    marginTop: 25,
+  card: {
+    marginTop: 24,
+    padding: 20,
+    borderRadius: radius.xl,
+    backgroundColor: colors.white,
+    ...shadows.card,
   },
   label: {
     marginBottom: 8,
-    marginTop: 16,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.text,
-  },
-  input: {
-    minHeight: 50,
-    paddingHorizontal: 15,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    color: colors.text,
-    fontSize: 15,
-  },
-  textArea: {
-    minHeight: 140,
-    paddingTop: 14,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
+    marginBottom: 20,
   },
   category: {
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
+    flexGrow: 1,
+    flexBasis: '45%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surfaceMuted,
   },
   categoryActive: {
-    backgroundColor: colors.primary,
     borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  categoryPressed: {
+    opacity: 0.8,
   },
   categoryText: {
-    color: colors.textSecondary,
-    fontSize: 13,
+    flexShrink: 1,
+    fontSize: 14,
     fontWeight: '600',
+    color: colors.textSecondary,
   },
   categoryTextActive: {
-    color: colors.white,
+    color: colors.primary,
   },
   notice: {
-    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     padding: 14,
     borderRadius: 14,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  noticeTitle: {
-    color: colors.primary,
-    fontWeight: '800',
-    fontSize: 13,
+    backgroundColor: colors.primarySoft,
   },
   noticeText: {
-    marginTop: 4,
-    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 13,
     lineHeight: 18,
-    fontSize: 12,
+    color: colors.textSecondary,
   },
-  button: {
-    marginTop: 22,
-    minHeight: 54,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-  },
-  buttonPressed: {
-    backgroundColor: colors.primaryDark,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '800',
+  submit: {
+    marginTop: 20,
   },
 });

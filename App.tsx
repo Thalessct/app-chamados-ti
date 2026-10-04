@@ -1,22 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import DashboardScreen from './src/screens/DashboardScreen';
 import NewTicketScreen from './src/screens/NewTicketScreen';
 import DetailsScreen from './src/screens/DetailsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import CadScreen from './src/screens/CadScreen';
+import TabBar from './src/components/TabBar';
+import {
+  AuthResult,
+  RegisterData,
+  registerUser,
+  restoreSession,
+  signIn,
+  signOut,
+} from './src/services/auth';
 import { Ticket, TicketStatus } from './src/types/ticket';
+import { SessionUser } from './src/types/user';
 import { colors } from './src/theme/colors';
+import { radius, shadows } from './src/theme/tokens';
 
 export type RootTabParamList = {
   Chamados: undefined;
   Novo: undefined;
   Perfil: undefined;
 };
+
+type AuthMode = 'login' | 'register';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
@@ -45,16 +62,22 @@ const initialTickets: Ticket[] = [
 export default function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadTickets();
+    bootstrap();
   }, []);
 
-  async function loadTickets() {
+  async function bootstrap() {
     try {
-      const saved = await AsyncStorage.getItem(STORAGE_KEY);
+      const [saved, session] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEY),
+        restoreSession(),
+      ]);
       setTickets(saved ? JSON.parse(saved) : initialTickets);
+      setUser(session);
     } catch {
       Alert.alert('Erro', 'Não foi possível carregar os chamados.');
       setTickets(initialTickets);
@@ -97,47 +120,82 @@ export default function App() {
     await persistTickets(updated);
   }
 
+  async function handleLogin(email: string, password: string): Promise<AuthResult> {
+    const result = await signIn(email, password);
+    if (result.ok) setUser(result.user);
+    return result;
+  }
+
+  async function handleRegister(data: RegisterData): Promise<AuthResult> {
+    const result = await registerUser(data);
+    if (result.ok) setUser(result.user);
+    return result;
+  }
+
+  async function handleLogout() {
+    await signOut();
+    setSelectedTicketId(null);
+    setAuthMode('login');
+    setUser(null);
+  }
+
   if (loading) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Carregando chamados...</Text>
-      </View>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <View style={styles.loading}>
+          <View style={styles.logo}>
+            <Ionicons name="headset" size={32} color={colors.white} />
+          </View>
+          <ActivityIndicator style={styles.spinner} size="small" color={colors.onDark} />
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        {authMode === 'login' ? (
+          <LoginScreen
+            onLogin={handleLogin}
+            onGoToRegister={() => setAuthMode('register')}
+          />
+        ) : (
+          <CadScreen
+            onRegister={handleRegister}
+            onGoToLogin={() => setAuthMode('login')}
+          />
+        )}
+      </SafeAreaProvider>
     );
   }
 
   const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId);
+  const openTickets = tickets.filter((ticket) => ticket.status === 'ABERTO').length;
 
   return (
-    <>
-      <StatusBar style="dark" />
+    <SafeAreaProvider>
+      <StatusBar style="light" />
       <NavigationContainer>
         <Tab.Navigator
-          screenOptions={{
-            headerShown: false,
-            tabBarActiveTintColor: colors.primary,
-            tabBarInactiveTintColor: colors.textSecondary,
-            tabBarStyle: styles.tabBar,
-            tabBarLabelStyle: styles.tabLabel,
-          }}
+          screenOptions={{ headerShown: false }}
+          tabBar={(props) => <TabBar {...props} />}
         >
-          <Tab.Screen
-            name="Chamados"
-            options={{ tabBarIcon: () => <Text style={styles.tabIcon}>▣</Text> }}
-          >
+          <Tab.Screen name="Chamados">
             {({ navigation }) => (
               <DashboardScreen
                 tickets={tickets}
+                userName={user.name}
                 onNewTicket={() => navigation.navigate('Novo')}
                 onSelectTicket={(id) => setSelectedTicketId(id)}
               />
             )}
           </Tab.Screen>
 
-          <Tab.Screen
-            name="Novo"
-            options={{ tabBarIcon: () => <Text style={styles.tabIcon}>＋</Text> }}
-          >
+          <Tab.Screen name="Novo">
             {({ navigation }) => (
               <NewTicketScreen
                 onCreate={async (data) => {
@@ -149,11 +207,15 @@ export default function App() {
             )}
           </Tab.Screen>
 
-          <Tab.Screen
-            name="Perfil"
-            options={{ tabBarIcon: () => <Text style={styles.tabIcon}>●</Text> }}
-          >
-            {() => <ProfileScreen totalTickets={tickets.length} />}
+          <Tab.Screen name="Perfil">
+            {() => (
+              <ProfileScreen
+                user={user}
+                totalTickets={tickets.length}
+                openTickets={openTickets}
+                onLogout={handleLogout}
+              />
+            )}
           </Tab.Screen>
         </Tab.Navigator>
 
@@ -168,7 +230,7 @@ export default function App() {
           />
         )}
       </NavigationContainer>
-    </>
+    </SafeAreaProvider>
   );
 }
 
@@ -179,24 +241,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.background,
   },
+  logo: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary,
+    ...shadows.primary,
+  },
+  spinner: {
+    marginTop: 28,
+  },
   loadingText: {
     marginTop: 12,
-    color: colors.textSecondary,
+    color: colors.onDarkMuted,
     fontSize: 14,
-  },
-  tabBar: {
-    height: 68,
-    paddingBottom: 8,
-    paddingTop: 5,
-    backgroundColor: colors.white,
-    borderTopColor: colors.border,
-  },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tabIcon: {
-    fontSize: 20,
-    color: colors.primary,
   },
 });

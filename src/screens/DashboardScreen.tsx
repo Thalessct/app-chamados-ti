@@ -1,103 +1,143 @@
 import React, { useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ticket, TicketStatus } from '../types/ticket';
 import { colors } from '../theme/colors';
+import { useTabBarSpace } from '../theme/layout';
+import { radius, typography } from '../theme/tokens';
 import StatCard from '../components/StatCard';
 import FilterChip from '../components/FilterChip';
 import TicketCard from '../components/TicketCard';
+import Button from '../components/Button';
 
 interface Props {
   tickets: Ticket[];
+  userName: string;
   onNewTicket: () => void;
   onSelectTicket: (id: string) => void;
 }
 
 type Filter = 'TODOS' | TicketStatus;
 
+const emptyMessages: Record<Filter, { title: string; text: string }> = {
+  TODOS: {
+    title: 'Nenhum chamado por aqui',
+    text: '',
+  },
+  ABERTO: {
+    title: 'Nenhum chamado aberto',
+    text: 'Tudo resolvido por enquanto. Abra um novo chamado se surgir algo.',
+  },
+  FECHADO: {
+    title: 'Nenhum chamado fechado',
+    text: 'Os chamados encerrados aparecem aqui.',
+  },
+};
+
 export default function DashboardScreen({
   tickets,
+  userName,
   onNewTicket,
   onSelectTicket,
 }: Props) {
   const [filter, setFilter] = useState<Filter>('TODOS');
+  const tabBarSpace = useTabBarSpace();
 
   const openCount = tickets.filter((ticket) => ticket.status === 'ABERTO').length;
   const closedCount = tickets.filter((ticket) => ticket.status === 'FECHADO').length;
+  const firstName = userName.trim().split(/\s+/)[0];
 
   const filteredTickets = useMemo(() => {
     if (filter === 'TODOS') return tickets;
     return tickets.filter((ticket) => ticket.status === filter);
   }, [filter, tickets]);
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Olá! 👋</Text>
-        <Text style={styles.subtitle}>Acompanhe seus chamados</Text>
-      </View>
+  const empty = emptyMessages[filter];
 
+  return (
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
       <FlatList
         data={filteredTickets}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
         ListHeaderComponent={
-          <>
-            <View style={styles.statsRow}>
-              <StatCard value={openCount} label="Chamados abertos" />
-              <StatCard value={closedCount} label="Chamados fechados" />
+          <View>
+            <View style={styles.header}>
+              <View style={styles.headerText}>
+                <Text style={styles.greeting}>Olá, {firstName}</Text>
+                <Text style={styles.title} accessibilityRole="header">
+                  Meus chamados
+                </Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Abrir novo chamado"
+                onPress={onNewTicket}
+                style={({ pressed }) => [styles.newButton, pressed && styles.newButtonPressed]}
+              >
+                <Ionicons name="add" size={20} color={colors.white} />
+                <Text style={styles.newButtonText}>Novo</Text>
+              </Pressable>
             </View>
 
-            <Text style={styles.sectionTitle}>Meus chamados</Text>
+            <View style={styles.statsRow}>
+              <StatCard
+                variant="primary"
+                icon="folder-open-outline"
+                value={openCount}
+                label="Chamados abertos"
+              />
+              <StatCard
+                icon="checkmark-done-outline"
+                value={closedCount}
+                label="Chamados fechados"
+              />
+            </View>
 
             <View style={styles.filters}>
               <FilterChip
                 label="Todos"
+                count={tickets.length}
                 active={filter === 'TODOS'}
                 onPress={() => setFilter('TODOS')}
               />
               <FilterChip
                 label="Abertos"
+                count={openCount}
                 active={filter === 'ABERTO'}
                 onPress={() => setFilter('ABERTO')}
               />
               <FilterChip
                 label="Fechados"
+                count={closedCount}
                 active={filter === 'FECHADO'}
                 onPress={() => setFilter('FECHADO')}
               />
             </View>
-          </>
+          </View>
         }
         renderItem={({ item }) => (
           <TicketCard ticket={item} onPress={() => onSelectTicket(item.id)} />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>□</Text>
-            <Text style={styles.emptyTitle}>Nenhum chamado encontrado</Text>
-            <Text style={styles.emptyText}>
-              Crie um novo chamado para começar.
-            </Text>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="file-tray-outline" size={30} color={colors.white} />
+            </View>
+            <Text style={styles.emptyTitle}>{empty.title}</Text>
+            <Text style={styles.emptyText}>{empty.text}</Text>
+            {filter === 'TODOS' ? (
+              <View style={styles.emptyAction}>
+                <Button label="Abrir chamado" icon="add" onPress={onNewTicket} />
+              </View>
+            ) : null}
           </View>
         }
       />
-
-      <Pressable
-        accessibilityLabel="Criar novo chamado"
-        onPress={onNewTicket}
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </Pressable>
     </SafeAreaView>
   );
 }
@@ -107,85 +147,85 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  content: {
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 10,
+    paddingTop: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  headerText: {
+    flex: 1,
   },
   greeting: {
-    fontSize: 27,
-    fontWeight: '800',
-    color: colors.text,
+    ...typography.body,
+    color: colors.onDarkMuted,
   },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: colors.textSecondary,
+  title: {
+    ...typography.display,
+    marginTop: 2,
+    color: colors.onDark,
   },
-  content: {
-    paddingHorizontal: 15,
-    paddingBottom: 100,
+  newButton: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingLeft: 12,
+    paddingRight: 18,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  newButtonPressed: {
+    backgroundColor: colors.primaryDark,
+    transform: [{ scale: 0.97 }],
+  },
+  newButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.white,
   },
   statsRow: {
     flexDirection: 'row',
-    marginHorizontal: -5,
-    marginTop: 8,
-    marginBottom: 26,
-  },
-  sectionTitle: {
-    marginBottom: 12,
-    fontSize: 19,
-    fontWeight: '800',
-    color: colors.text,
+    gap: 12,
+    marginTop: 24,
   },
   filters: {
     flexDirection: 'row',
-    marginBottom: 15,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 24,
+    marginBottom: 16,
   },
   empty: {
     alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 30,
+    paddingTop: 36,
+    paddingHorizontal: 24,
   },
   emptyIcon: {
-    fontSize: 38,
-    color: colors.primary,
-  },
-  emptyTitle: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  emptyText: {
-    marginTop: 5,
-    textAlign: 'center',
-    color: colors.textSecondary,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 18,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.primary,
+    width: 68,
+    height: 68,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 7,
+    borderRadius: 34,
+    backgroundColor: colors.onDarkFaint,
   },
-  fabPressed: {
-    backgroundColor: colors.primaryDark,
-    transform: [{ scale: 0.96 }],
+  emptyTitle: {
+    ...typography.heading,
+    marginTop: 16,
+    color: colors.onDark,
   },
-  fabText: {
-    color: colors.white,
-    fontSize: 32,
-    lineHeight: 34,
-    fontWeight: '300',
+  emptyText: {
+    ...typography.body,
+    marginTop: 6,
+    textAlign: 'center',
+    color: colors.onDarkMuted,
+  },
+  emptyAction: {
+    marginTop: 20,
+    alignSelf: 'stretch',
   },
 });

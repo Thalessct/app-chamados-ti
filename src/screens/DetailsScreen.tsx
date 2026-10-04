@@ -1,15 +1,14 @@
-import React from 'react';
-import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ticket } from '../types/ticket';
 import { colors } from '../theme/colors';
+import { categoryIcons, IconName } from '../theme/categories';
+import { radius, shadows, typography } from '../theme/tokens';
+import Button from '../components/Button';
+import StatusPill from '../components/StatusPill';
 
 interface Props {
   ticket: Ticket;
@@ -19,57 +18,83 @@ interface Props {
 
 export default function DetailsScreen({ ticket, onBack, onClose }: Props) {
   const open = ticket.status === 'ABERTO';
+  const [closing, setClosing] = useState(false);
+
+  async function handleClose() {
+    if (closing) return;
+    setClosing(true);
+    try {
+      await onClose();
+    } finally {
+      setClosing(false);
+    }
+  }
 
   return (
     <View style={styles.overlay}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Pressable onPress={onBack} style={styles.back}>
-            <Text style={styles.backText}>‹ Voltar</Text>
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            hitSlop={8}
+            onPress={onBack}
+            style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.onDark} />
           </Pressable>
+          <Text style={styles.topTitle}>Chamado #{ticket.id}</Text>
+          <View style={styles.backButton} />
+        </View>
 
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.label}>Chamado #{ticket.id}</Text>
-              <Text style={styles.title}>{ticket.title}</Text>
-            </View>
-
-            <View style={[styles.status, open ? styles.open : styles.closed]}>
-              <Text style={[styles.statusText, open ? styles.openText : styles.closedText]}>
-                {ticket.status}
-              </Text>
-            </View>
-          </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          <StatusPill status={ticket.status} />
+          <Text style={styles.title} accessibilityRole="header">
+            {ticket.title}
+          </Text>
 
           <View style={styles.card}>
-            <Detail label="Categoria" value={ticket.category} />
-            <Detail label="Aberto em" value={ticket.createdAt} />
-            {ticket.closedAt && (
-              <Detail label="Fechado em" value={ticket.closedAt} />
-            )}
+            <Detail
+              icon={categoryIcons[ticket.category]}
+              label="Categoria"
+              value={ticket.category}
+            />
+            <Detail icon="calendar-outline" label="Aberto em" value={ticket.createdAt} />
+            {ticket.closedAt ? (
+              <Detail
+                icon="checkmark-circle-outline"
+                label="Fechado em"
+                value={ticket.closedAt}
+              />
+            ) : null}
 
-            <Text style={styles.detailLabel}>Descrição</Text>
+            <View style={styles.divider} />
+
+            <Text style={styles.descriptionLabel}>Descrição</Text>
             <Text style={styles.description}>{ticket.description}</Text>
           </View>
 
-          {open && (
-            <Pressable
-              onPress={onClose}
-              style={({ pressed }) => [
-                styles.closeButton,
-                pressed && styles.closeButtonPressed,
-              ]}
-            >
-              <Text style={styles.closeButtonText}>Fechar chamado</Text>
-            </Pressable>
-          )}
-
-          {!open && (
+          {open ? (
+            <View style={styles.action}>
+              <Button
+                label="Fechar chamado"
+                icon="checkmark-done-outline"
+                loading={closing}
+                onPress={handleClose}
+              />
+            </View>
+          ) : (
             <View style={styles.closedNotice}>
-              <Text style={styles.closedNoticeTitle}>Chamado encerrado</Text>
-              <Text style={styles.closedNoticeText}>
-                Este chamado está fechado e não pode mais ser alterado.
-              </Text>
+              <Ionicons name="lock-closed" size={20} color={colors.onDark} />
+              <View style={styles.closedNoticeBody}>
+                <Text style={styles.closedNoticeTitle}>Chamado encerrado</Text>
+                <Text style={styles.closedNoticeText}>
+                  Este chamado está fechado e não pode mais ser alterado.
+                </Text>
+              </View>
             </View>
           )}
         </ScrollView>
@@ -78,11 +103,16 @@ export default function DetailsScreen({ ticket, onBack, onClose }: Props) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({ icon, label, value }: { icon: IconName; label: string; value: string }) {
   return (
     <View style={styles.detail}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
+      <View style={styles.detailIcon}>
+        <Ionicons name={icon} size={20} color={colors.primary} />
+      </View>
+      <View>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailValue}>{value}</Text>
+      </View>
     </View>
   );
 }
@@ -99,124 +129,108 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+  },
+  backPressed: {
+    backgroundColor: colors.onDarkFaint,
+  },
+  topTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.onDark,
+  },
   content: {
     padding: 20,
     paddingBottom: 40,
   },
-  back: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingRight: 12,
-  },
-  backText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  headerRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
   title: {
-    maxWidth: 235,
-    marginTop: 5,
-    fontSize: 25,
-    lineHeight: 30,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  status: {
-    marginTop: 4,
-    borderRadius: 20,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-  },
-  open: {
-    backgroundColor: '#EFF6FF',
-  },
-  closed: {
-    backgroundColor: '#E5E7EB',
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  openText: {
-    color: colors.primary,
-  },
-  closedText: {
-    color: colors.textSecondary,
+    ...typography.display,
+    marginTop: 14,
+    color: colors.onDark,
   },
   card: {
     marginTop: 24,
-    padding: 18,
-    borderRadius: 18,
+    padding: 20,
+    borderRadius: radius.xl,
     backgroundColor: colors.white,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
+    ...shadows.card,
   },
   detail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     marginBottom: 18,
   },
-  detailLabel: {
-    marginBottom: 5,
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  detailValue: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  description: {
-    color: colors.text,
-    lineHeight: 21,
-    fontSize: 14,
-  },
-  closeButton: {
-    marginTop: 18,
-    minHeight: 54,
-    borderRadius: 15,
+  detailIcon: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
+    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
   },
-  closeButtonPressed: {
-    backgroundColor: colors.primaryDark,
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textMuted,
   },
-  closeButtonText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '800',
+  detailValue: {
+    marginTop: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  divider: {
+    height: 1,
+    marginBottom: 16,
+    backgroundColor: colors.border,
+  },
+  descriptionLabel: {
+    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  description: {
+    ...typography.body,
+    color: colors.text,
+  },
+  action: {
+    marginTop: 20,
   },
   closedNotice: {
-    marginTop: 18,
-    padding: 15,
-    borderRadius: 15,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: radius.lg,
+    backgroundColor: colors.onDarkFaint,
+  },
+  closedNoticeBody: {
+    flex: 1,
   },
   closedNoticeTitle: {
-    color: colors.text,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.onDark,
   },
   closedNoticeText: {
-    marginTop: 5,
-    color: colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.onDarkMuted,
   },
 });
