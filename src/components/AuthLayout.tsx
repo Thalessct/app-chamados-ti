@@ -45,13 +45,7 @@ export default function AuthLayout({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        <View style={styles.hero}>
-          <Image
-            source={require('../../assets/background.jpeg')}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            blurRadius={2}
-          />
+
           <View style={[StyleSheet.absoluteFill, styles.overlay]} />
 
           <SafeAreaView edges={['top']} style={styles.heroContent}>
@@ -78,7 +72,6 @@ export default function AuthLayout({
             </Text>
             <Text style={styles.heroSubtitle}>{subtitle}</Text>
           </SafeAreaView>
-        </View>
 
         <View style={[styles.sheet, { paddingBottom: 32 + insets.bottom }]}>
           <View style={styles.sheetInner}>{children}</View>
